@@ -1,0 +1,7 @@
+# Ceedling
+build/
+
+#STM32 car++1
+Debug/
+Release/
+NUCLEO-F746ZG.xml
