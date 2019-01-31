@@ -54,7 +54,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,7 +102,9 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
-
+char tmp[1];
+char buffer[32];
+int counter = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -1159,7 +1161,7 @@ static void MX_USART6_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART6_Init 2 */
-
+  HAL_UART_Receive_IT(&huart6, tmp, 1);
   /* USER CODE END USART6_Init 2 */
 
 }
@@ -1298,7 +1300,28 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
+    buffer[counter] = tmp[0];
 
+    counter++;
+    if (tmp[0] == '\n') {
+
+        buffer[counter - 1] = '\0';
+
+        counter = 0;
+        if (!strcmp(buffer, "on")) {
+            HAL_UART_Transmit(&huart6,(uint8_t *)"onononon\r\n", 11,100);
+            HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
+        } else if (!strcmp(buffer, "off")) {
+            HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
+            HAL_UART_Transmit(&huart6,(uint8_t *)"offoffof\r\n", 11,100);
+        }
+
+    }
+    HAL_UART_Receive_IT(&huart6, tmp, 1);
+
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1315,7 +1338,10 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+     osDelay(1000);
+     HAL_GPIO_TogglePin(GPIOB, LD2_Pin);
+
+     HAL_GPIO_WritePin(GPIOG,BT_nRESET_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END 5 */ 
 }
