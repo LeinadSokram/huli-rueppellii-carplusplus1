@@ -1,7 +1,7 @@
 [PreviousGenFiles]
-HeaderPath=C:/Users/Titkos/Desktop/carplusplus/nucleo_144/rendes_SW/Inc
+HeaderPath=C:/Users/Titkos/Desktop/Nucleo_144_app/Inc
 HeaderFiles=FreeRTOSConfig.h;stm32f7xx_it.h;stm32f7xx_hal_conf.h;main.h;
-SourcePath=C:/Users/Titkos/Desktop/carplusplus/nucleo_144/rendes_SW/Src
+SourcePath=C:/Users/Titkos/Desktop/Nucleo_144_app/Src
 SourceFiles=freertos.c;stm32f7xx_it.c;stm32f7xx_hal_msp.c;stm32f7xx_hal_timebase_tim.c;main.c;
 
 [PreviousLibFiles]
