@@ -217,7 +217,7 @@ int main(void)
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
- 
+
 
   /* Start scheduler */
   osKernelStart();
@@ -253,6 +253,7 @@ void SystemClock_Config(void)
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /**Initializes the CPU, AHB and APB busses clocks 
+
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
@@ -421,6 +422,7 @@ static void MX_ADC3_Init(void)
 
   /* USER CODE END ADC3_Init 1 */
   /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+
   */
   hadc3.Instance = ADC3;
   hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
@@ -439,6 +441,7 @@ static void MX_ADC3_Init(void)
     Error_Handler();
   }
   /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
+
   */
   sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
@@ -604,9 +607,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 4320-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 0;
+  htim1.Init.Period = 1000-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -648,7 +651,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM1_Init 2 */
-
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
 
@@ -1334,7 +1337,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 void StartDefaultTask(void const * argument)
 {
 
-  /* USER CODE BEGIN 5 */
+/* USER CODE BEGIN 5 */
+  int i = 935;
+  htim1.Instance->CCR1 = i;
   /* Infinite loop */
   for(;;)
   {
@@ -1342,8 +1347,21 @@ void StartDefaultTask(void const * argument)
      HAL_GPIO_TogglePin(GPIOB, LD2_Pin);
 
      HAL_GPIO_WritePin(GPIOG,BT_nRESET_Pin, GPIO_PIN_SET);
+
+     HAL_UART_Transmit(&huart3,(uint8_t *)"bal\r\n", 5,100);
+	while(i > 924){
+		htim1.Instance->CCR1 = i;
+		i--;
+		osDelay(100);
+	}
+	HAL_UART_Transmit(&huart3,(uint8_t *)"jobb\r\n", 6,100);
+	while(i < 945){
+		htim1.Instance->CCR1 = i;
+		i++;
+		osDelay(100);
+	}
   }
-  /* USER CODE END 5 */ 
+/* USER CODE END 5 */
 }
 
 /**

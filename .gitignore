@@ -6,3 +6,4 @@ Debug/
 Release/
 NUCLEO-F746ZG.xml
 .settings/
+SDC-NUCLEO Run.cfg
