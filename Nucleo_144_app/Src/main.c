@@ -217,7 +217,7 @@ int main(void)
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
-
+ 
 
   /* Start scheduler */
   osKernelStart();
@@ -253,7 +253,6 @@ void SystemClock_Config(void)
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /**Initializes the CPU, AHB and APB busses clocks 
-
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
@@ -422,7 +421,6 @@ static void MX_ADC3_Init(void)
 
   /* USER CODE END ADC3_Init 1 */
   /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
-
   */
   hadc3.Instance = ADC3;
   hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
@@ -441,7 +439,6 @@ static void MX_ADC3_Init(void)
     Error_Handler();
   }
   /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
-
   */
   sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
@@ -1129,7 +1126,7 @@ static void MX_USART3_UART_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN USART3_Init 2 */
-
+  HAL_UART_Receive_IT(&huart3, tmp, 1);
   /* USER CODE END USART3_Init 2 */
 
 }
@@ -1304,26 +1301,34 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
-    buffer[counter] = tmp[0];
-
-    counter++;
-    if (tmp[0] == '\n') {
-
-        buffer[counter - 1] = '\0';
-
-        counter = 0;
-        if (!strcmp(buffer, "on")) {
-            HAL_UART_Transmit(&huart6,(uint8_t *)"onononon\r\n", 11,100);
-            HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
-        } else if (!strcmp(buffer, "off")) {
-            HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
-            HAL_UART_Transmit(&huart6,(uint8_t *)"offoffof\r\n", 11,100);
+    if (huart->Instance == USART6) {
+        buffer[counter] = tmp[0];
+        counter++;
+        if (tmp[0] == '\n') {
+            buffer[counter - 1] = '\0';
+            counter = 0;
+            if (!strcmp(buffer, "on")) {
+                HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
+            } else if (!strcmp(buffer, "off")) {
+                HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
+            }
         }
-
+        HAL_UART_Receive_IT(&huart6, tmp, 1);
     }
-    HAL_UART_Receive_IT(&huart6, tmp, 1);
-
+    if (huart->Instance == USART3) {
+        buffer[counter] = tmp[0];
+        counter++;
+        if (tmp[0] == '\n') {
+            buffer[counter - 1] = '\0';
+            counter = 0;
+            if (!strcmp(buffer, "on")) {
+                HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
+            } else if (!strcmp(buffer, "off")) {
+                HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_RESET);
+            }
+        }
+        HAL_UART_Receive_IT(&huart3, tmp, 1);
+    }
 }
 /* USER CODE END 4 */
 
@@ -1337,7 +1342,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 void StartDefaultTask(void const * argument)
 {
 
-/* USER CODE BEGIN 5 */
+  /* USER CODE BEGIN 5 */
   int i = 935;
   htim1.Instance->CCR1 = i;
   /* Infinite loop */
@@ -1361,7 +1366,7 @@ void StartDefaultTask(void const * argument)
 		osDelay(100);
 	}
   }
-/* USER CODE END 5 */
+  /* USER CODE END 5 */ 
 }
 
 /**
