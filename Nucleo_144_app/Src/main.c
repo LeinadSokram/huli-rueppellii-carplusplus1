@@ -59,12 +59,16 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum printf_modes{
+   USB,
+   BLUETOOTH,
+   BOTH
+} printf_modes_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define UART_PUTCHAR int __io_putchar(int ch)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -105,6 +109,7 @@ osThreadId defaultTaskHandle;
 char tmp[1];
 char buffer[32];
 int counter = 0;
+printf_modes_t printf_mode = BOTH;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -190,7 +195,19 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  UART_PUTCHAR {
+     if(printf_mode == USB){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BLUETOOTH){
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BOTH){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     return ch;
+  }
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
