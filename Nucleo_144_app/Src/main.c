@@ -59,12 +59,16 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum printf_modes{
+   USB,
+   BLUETOOTH,
+   BOTH
+} printf_modes_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define UART_PUTCHAR int __io_putchar(int ch)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -105,6 +109,20 @@ osThreadId defaultTaskHandle;
 char tmp[1];
 char buffer[32];
 int counter = 0;
+
+printf_modes_t printf_mode = BOTH;
+
+typedef enum motor_direction
+{
+   FORWARD,
+   BACKWARD
+}motor_direction_t;
+
+motor_direction_t motor_dir = FORWARD;
+
+void drive(int speed);
+void brake();
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -670,40 +688,37 @@ static void MX_TIM2_Init(void)
   TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
-
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 0;
+  htim2.Init.Period = 400;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) {
+      Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK) {
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 10;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK) {
+      Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+  // STARTING PWM/TIMER FOR MOTOR DRIVE
+  HAL_TIM_Base_Start(&htim2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  /* USER CODE END TIM2_Init 2 */
 
 }
-
-/**
+  /**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -1300,6 +1315,21 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+UART_PUTCHAR {
+     if(printf_mode == USB){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BLUETOOTH){
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BOTH){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     return ch;
+  }
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART6) {
         buffer[counter] = tmp[0];
@@ -1367,6 +1397,38 @@ void StartDefaultTask(void const * argument)
 	}
   }
   /* USER CODE END 5 */ 
+}
+
+void drive(int speed)
+{
+   if(speed > 100){
+       speed = 100;
+   }
+   if(speed > 0){
+   //nSleep
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
+   //Disable -> inverse logic
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+   //forward 77 - 100% moves -> 0.23
+   //backward 0 - 24% moves -> 0.24
+   float speed_pwm;
+   if(motor_dir == FORWARD){
+       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);
+       speed_pwm = htim2.Init.Period * (0.77 + (float) speed * 0.23 / 100);
+       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
+   } else if(motor_dir == BACKWARD){
+       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
+       speed_pwm = htim2.Init.Period * (0.24 - (float) speed * 0.24 / 100);
+       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
+   }
+   }else if(speed <= 0){
+       brake();
+   }
+}
+
+void brake()
+{
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
 }
 
 /**
