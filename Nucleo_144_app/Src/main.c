@@ -55,6 +55,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -109,6 +110,11 @@ osThreadId defaultTaskHandle;
 char tmp[1];
 char buffer[32];
 int counter = 0;
+
+volatile int hall_overflow = 0;
+volatile int hall_previous = 0;
+volatile float moving_speed_kmh;
+
 
 printf_modes_t printf_mode = BOTH;
 
@@ -208,7 +214,19 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  UART_PUTCHAR {
+     if(printf_mode == USB){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BLUETOOTH){
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BOTH){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     return ch;
+  }
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -844,23 +862,30 @@ static void MX_TIM9_Init(void)
   htim9.Instance = TIM9;
   htim9.Init.Prescaler = 0;
   htim9.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim9.Init.Period = 0;
+  htim9.Init.Period = 65535;
   htim9.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim9.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_IC_Init(&htim9) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+
+  HAL_NVIC_SetPriority(TIM1_BRK_TIM9_IRQn, 0x01, 0x00);
+  HAL_NVIC_EnableIRQ(TIM1_BRK_TIM9_IRQn);
+
+  HAL_TIM_Base_Start_IT(&htim9);
+
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 5;
   if (HAL_TIM_IC_ConfigChannel(&htim9, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM9_Init 2 */
 
+  /* USER CODE BEGIN TIM9_Init 2 */
+  HAL_TIM_IC_Start_IT(&htim9, TIM_CHANNEL_1);
   /* USER CODE END TIM9_Init 2 */
 
 }
@@ -1373,28 +1398,11 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN 5 */
-  int i = 935;
-  htim1.Instance->CCR1 = i;
+
   /* Infinite loop */
   for(;;)
   {
-     osDelay(1000);
-     HAL_GPIO_TogglePin(GPIOB, LD2_Pin);
 
-     HAL_GPIO_WritePin(GPIOG,BT_nRESET_Pin, GPIO_PIN_SET);
-
-     HAL_UART_Transmit(&huart3,(uint8_t *)"bal\r\n", 5,100);
-	while(i > 924){
-		htim1.Instance->CCR1 = i;
-		i--;
-		osDelay(100);
-	}
-	HAL_UART_Transmit(&huart3,(uint8_t *)"jobb\r\n", 6,100);
-	while(i < 945){
-		htim1.Instance->CCR1 = i;
-		i++;
-		osDelay(100);
-	}
   }
   /* USER CODE END 5 */ 
 }
@@ -1431,6 +1439,20 @@ void brake()
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
 }
 
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if(htim->Instance == TIM9){
+        int tim9_cnt = TIM9->CNT;
+        float steps = hall_overflow * 65535 + tim9_cnt - hall_previous;
+        hall_previous = tim9_cnt;
+        float freq = 216000000 / steps;
+        hall_overflow = 0;
+        moving_speed_kmh = freq * M_PI * 0.06 * 3.6;
+    }
+}
+
+
 /**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM14 interrupt took place, inside
@@ -1448,7 +1470,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
-
+  if(htim->Instance == TIM9){
+      hall_overflow++;
+  }
   /* USER CODE END Callback 1 */
 }
 
