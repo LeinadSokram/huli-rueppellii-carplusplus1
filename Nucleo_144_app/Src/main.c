@@ -212,19 +212,7 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-  UART_PUTCHAR {
-     if(printf_mode == USB){
-         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     else if(printf_mode == BLUETOOTH){
-         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     else if(printf_mode == BOTH){
-         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
-         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     return ch;
-  }
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -1338,6 +1326,21 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+UART_PUTCHAR
+{
+     if(printf_mode == USB){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BLUETOOTH){
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BOTH){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     return ch;
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART6) {
         buffer[counter] = tmp[0];
