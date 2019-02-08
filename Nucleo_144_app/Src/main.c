@@ -69,6 +69,23 @@ typedef enum printf_modes{
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define UART_PUTCHAR int __io_putchar(int ch)
+
+#define APDS9960ADDRESS (0b111001<<1)
+#define TCA9548AADDRESS (0b1110000<<1) //0x70 (hex)
+
+//APDS-9960 registers definition
+#define _ENABLE  0x80    // Enable status and interrupts
+#define _ATIME   0x81    // RGBC ADC time
+#define _CONTROL 0x8F    // Gain control register
+#define _CDATA   0x94    // Clear ADC low data register
+#define _CDATAH  0x95    // Clear ADC high data register
+#define _RDATA   0x96    // RED ADC low data register
+#define _RDATAH  0x97    // RED ADC high data register
+#define _GDATA   0x98    // GREEN ADC low data register
+#define _GDATAH  0x99    // GREEN ADC high data register
+#define _BDATA   0x9A    // BLUE ADC low data register
+#define _BDATAH  0x9B    // BLUE ADC high data register
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -105,7 +122,12 @@ UART_HandleTypeDef huart6;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
+osThreadId RGBHandle;
 /* USER CODE BEGIN PV */
+uint8_t standby_value = 0;
+uint8_t standbyvalue = 0;
+uint16_t Clear, Red, Green, Blue;
+
 char tmp[1];
 char buffer[32];
 int counter = 0;
@@ -149,6 +171,7 @@ static void MX_USART3_UART_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 void StartDefaultTask(void const * argument);
+void RGB_Sensor(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -208,19 +231,7 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-  UART_PUTCHAR {
-     if(printf_mode == USB){
-         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     else if(printf_mode == BLUETOOTH){
-         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     else if(printf_mode == BOTH){
-         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
-         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
-     }
-     return ch;
-  }
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -239,6 +250,10 @@ int main(void)
   /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+  /* definition and creation of RGB */
+  osThreadDef(RGB, RGB_Sensor, osPriorityNormal, 0, 128);
+  RGBHandle = osThreadCreate(osThread(RGB), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -634,9 +649,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 4320-1;
+  htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000-1;
+  htim1.Init.Period = 0;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -702,25 +717,28 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 1 */
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 1;
+  htim2.Init.Prescaler = 0;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 400;
+  htim2.Init.Period = 0;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) {
-      Error_Handler();
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK) {
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 10;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK) {
-      Error_Handler();
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
@@ -728,9 +746,11 @@ static void MX_TIM2_Init(void)
   HAL_TIM_Base_Start(&htim2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
 
 }
-  /**
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -1327,6 +1347,20 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+UART_PUTCHAR {
+     if(printf_mode == USB){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BLUETOOTH){
+         HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     else if(printf_mode == BOTH){
+         HAL_UART_Transmit(&huart3, (uint8_t*) &ch, 1, 0xFFFF);
+        // HAL_UART_Transmit(&huart6, (uint8_t*) &ch, 1, 0xFFFF);
+     }
+     return ch;
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART6) {
         buffer[counter] = tmp[0];
@@ -1396,36 +1430,92 @@ void StartDefaultTask(void const * argument)
   /* USER CODE END 5 */ 
 }
 
-void drive(int speed)
-{
-   if(speed > 100){
-       speed = 100;
-   }
-   if(speed > 0){
-   //nSleep
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-   //Disable -> inverse logic
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
-   //forward 77 - 100% moves -> 0.23
-   //backward 0 - 24% moves -> 0.24
-   float speed_pwm;
-   if(motor_dir == FORWARD){
-       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);
-       speed_pwm = htim2.Init.Period * (0.77 + (float) speed * 0.23 / 100);
-       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
-   } else if(motor_dir == BACKWARD){
-       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
-       speed_pwm = htim2.Init.Period * (0.24 - (float) speed * 0.24 / 100);
-       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
-   }
-   }else if(speed <= 0){
-       brake();
-   }
+/* USER CODE BEGIN Header_RGB_Sensor */
+/**
+* @brief Function implementing the RGB thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_RGB_Sensor */
+unsigned int Color_Read_value(char reg) {
+  uint8_t low_byte;
+  uint8_t high_byte;
+  uint16_t color;
+
+  switch(reg) {
+    case 'C': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _CDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _CDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'R': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _RDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _RDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'G': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _GDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _GDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'B': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _BDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _BDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    default:  return 0;
+  }
 }
 
-void brake()
+void RGB_sensors(){
+	standby_value = 0b00000001;
+	for (int i = 0; i < 8; i++) {
+
+		HAL_GPIO_WritePin(GPIOG, EXP_nRESET_Pin, GPIO_PIN_SET);
+		HAL_I2C_Master_Transmit(&hi2c1, (uint16_t) TCA9548AADDRESS, &standby_value, 1, 1000);
+
+		standbyvalue = 0b00000000;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ENABLE, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0xDB;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ATIME, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0b11;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _CONTROL, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0b00000001 | 0b00000010;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ENABLE, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+		osDelay(110); //nem Johny mondta - 20ms-t mondott, de nem ment
+
+		Clear = Color_Read_value('C');
+		Red = Color_Read_value('R');
+		Green = Color_Read_value('G');
+		Blue = Color_Read_value('B');
+		printf("C: %d R: %d G: %d B: %d\r\n", Clear, Red * 255 / Clear, Green * 255 / Clear, Blue * 255 / Clear);
+		standby_value <<= 1;
+	}
+	HAL_GPIO_WritePin(GPIOG, EXP_nRESET_Pin, GPIO_PIN_RESET);
+}
+
+
+
+void RGB_Sensor(void const * argument)
 {
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+  /* USER CODE BEGIN RGB_Sensor */
+
+
+
+/* Infinite loop */
+	for(;;)
+  {
+	RGB_sensors();
+	osDelay(1000);
+  }
+  /* USER CODE END RGB_Sensor */
 }
 
 /**
