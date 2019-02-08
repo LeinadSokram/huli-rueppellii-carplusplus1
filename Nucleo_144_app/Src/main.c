@@ -56,6 +56,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <math.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,6 +66,44 @@ typedef enum printf_modes{
    BLUETOOTH,
    BOTH
 } printf_modes_t;
+
+typedef enum command_result{
+    INVALID_ARGUMENT,
+    BAD_COMMAND,
+    OK,
+    ER_MODE
+}command_result_t;
+
+typedef enum servo_direction {
+    SERVO_RIGHT,
+    SERVO_LEFT
+} servo_direction_t;
+
+typedef enum ultra_sonic_mode {
+    US_ENABLE,
+    US_DISABLE,
+    US_DISTANCE
+
+} ultra_sonic_mode_t;
+
+typedef enum rgb_sensor_list {
+    R,
+    G,
+    B,
+    C,
+    COLOR
+} rgb_sensor_list_t;
+
+typedef enum rgb_led_power {
+    ON,
+    OFF
+} rgb_led_power_t;
+
+typedef enum motor_direction
+{
+   FORWARD,
+   BACKWARD
+}motor_direction_t;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -110,22 +149,33 @@ osThreadId defaultTaskHandle;
 char tmp[1];
 char buffer[32];
 int counter = 0;
+char commands[32];
+
+
 volatile int hall_overflow = 0;
 volatile int hall_previous = 0;
 volatile float moving_speed_kmh;
 
 printf_modes_t printf_mode = BOTH;
 
-typedef enum motor_direction
-{
-   FORWARD,
-   BACKWARD
-}motor_direction_t;
-
-motor_direction_t motor_dir = FORWARD;
+motor_direction_t motor_direction = FORWARD;
 
 void drive(int speed);
 void brake();
+void parse_command(char *input);
+command_result_t parse_servo_command(char *input);
+command_result_t parse_motor_command(char *input);
+command_result_t parse_rgb_sensor_command(char *input);
+command_result_t parse_ultra_sonic_command(char *input);
+command_result_t parse_rgb_led_command(char *input);
+command_result_t parse_print_command(char *input);
+void servo_control(servo_direction_t, int percentage);
+void motor_control(motor_direction_t, int percentage);
+void rgb_control(rgb_sensor_list_t, int led_numb);
+void us_control(ultra_sonic_mode_t);
+void rgb_led_control(rgb_led_power_t, int led_numb);
+void print_control(printf_modes_t);
+void emergency_mode();
 
 /* USER CODE END PV */
 
@@ -1341,36 +1391,271 @@ UART_PUTCHAR
      return ch;
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-    if (huart->Instance == USART6) {
-        buffer[counter] = tmp[0];
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART3||huart->Instance == USART6) {
+        commands[counter] = tmp[0];
         counter++;
         if (tmp[0] == '\n') {
-            buffer[counter - 1] = '\0';
+            commands[counter - 1] = '\0';
             counter = 0;
-            if (!strcmp(buffer, "on")) {
-                HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
-            } else if (!strcmp(buffer, "off")) {
-                HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_RESET);
-            }
+            parse_command(commands);
         }
-        HAL_UART_Receive_IT(&huart6, tmp, 1);
-    }
-    if (huart->Instance == USART3) {
-        buffer[counter] = tmp[0];
-        counter++;
-        if (tmp[0] == '\n') {
-            buffer[counter - 1] = '\0';
-            counter = 0;
-            if (!strcmp(buffer, "on")) {
-                HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
-            } else if (!strcmp(buffer, "off")) {
-                HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_RESET);
-            }
-        }
-        HAL_UART_Receive_IT(&huart3, tmp, 1);
+        HAL_UART_Receive_IT(&huart, tmp, 1);
     }
 }
+
+void parse_command(char *input)
+{
+    char *tok;
+    tok = strtok(input, " ");
+    command_result_t result;
+
+    if (!strcmp(tok, "SERVO")) {
+        result = parse_servo_command(input);
+    } else if (!strcmp(tok, "MOTOR")) {
+        result = parse_motor_command(input);
+    } else if (!strcmp(tok, "RGB_SENSOR")) {
+        result = parse_rgb_sensor_command(input);
+    } else if (!strcmp(tok, "ULTRA_SONIC")) {
+        result = parse_ultra_sonic_command(input);
+    } else if (!strcmp(tok, "RGB_LED")) {
+        result = parse_rgb_led_command(input);
+    } else if (!strcmp(tok, "PRINT")) {
+        result = parse_print_command(input);
+    } else if (!strcmp(tok, "ER")) {
+        emergency_mode();
+        result = ER_MODE;
+    } else {
+        result = BAD_COMMAND;
+        printf("invalid component\r\n");
+    }
+
+
+    if (result == OK){
+        HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
+    }
+    else if (result == INVALID_ARGUMENT){
+        HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);
+    }
+    else if (result == BAD_COMMAND){
+            HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
+        }
+    else if (result == ER_MODE){
+        HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);
+    }
+
+}
+command_result_t parse_servo_command(char *input)
+{
+    char *direction;
+    char *percentage;
+    char *nptr = NULL;
+    int int_value;
+    direction = strtok(NULL, " ");
+    percentage = strtok(NULL, "\n");
+    int_value = strtol(percentage, &nptr, 10);
+
+    if (((int_value) > 99) || (int_value < 0))
+        return INVALID_ARGUMENT;
+
+    if ((!strcmp(direction, "R"))) {
+        servo_control(SERVO_RIGHT, int_value);
+        return OK;
+    } else if ((!strcmp(direction, "L"))) {
+        servo_control(SERVO_LEFT, int_value);
+        return OK;
+    } else if (percentage == nptr) {
+        printf("invalid servo values\r\n");
+        return INVALID_ARGUMENT;
+    } else {
+        printf("invalid direction(R/L) \r\n");
+        return BAD_COMMAND;
+    }
+}
+command_result_t parse_motor_command(char *input)
+{
+    char *direction;
+    char *percentage;
+    char *nptr = NULL;
+    int int_value;
+    direction = strtok(NULL, " ");
+    percentage = strtok(NULL, "\n");
+    int_value = strtol(percentage, &nptr, 10);
+
+    if (((int_value) > 99) || (int_value < 0))
+        return INVALID_ARGUMENT;
+
+    if ((!strcmp(direction, "FWD"))) {
+        motor_control(FORWARD, int_value);
+        return OK;
+    } else if ((!strcmp(direction, "BCK"))) {
+        motor_control(BACKWARD, int_value);
+        return OK;
+    } else if (percentage == nptr) {
+        printf("invalid motor values\r\n");
+        return INVALID_ARGUMENT;
+    } else {
+        printf("invalid direction (FWD/BCK)\r\n");
+        return INVALID_ARGUMENT;
+    }
+}
+command_result_t parse_rgb_sensor_command(char *input)
+{
+    char * sensor_register;
+    char * sensor_number;
+    char * nptr = NULL;
+    int int_value;
+    sensor_register = strtok(NULL, " ");
+    sensor_number = strtok(NULL, "\n");
+    int_value = strtol(sensor_number, &nptr, 10);
+
+    if (((int_value) > 8) || (int_value < 1))
+        return INVALID_ARGUMENT;
+
+    if ((!strcmp(sensor_register, "R"))) {
+        rgb_control(R, int_value);
+        return OK;
+    } else if ((!strcmp(sensor_register, "G"))) {
+        rgb_control(G, int_value);
+        return OK;
+    } else if ((!strcmp(sensor_register, "B"))) {
+        rgb_control(B, int_value);
+        return OK;
+    } else if ((!strcmp(sensor_register, "C"))) {
+        rgb_control(C, int_value);
+        return OK;
+    } else if ((!strcmp(sensor_register, "COLOR"))) {
+        rgb_control(COLOR, int_value);
+        return OK;
+    } else if (sensor_number == nptr) {
+        printf("invalid RGB_LED values\r\n");
+        return INVALID_ARGUMENT;
+    } else {
+        printf("invalid RGB CODE values (R/G/B/C/COLOR) \r\n");
+        return BAD_COMMAND;
+    }
+}
+command_result_t parse_ultra_sonic_command(char *input)
+{
+    char *mode;
+
+    mode = strtok(NULL, " ");
+
+    if (!strcmp(mode, "ENABLE")) {
+        us_control(US_ENABLE);
+        return OK;
+    } else if (!strcmp(mode, "DISABLE")) {
+        us_control(US_DISABLE);
+        return OK;
+    } else if (!strcmp(mode, "DISTANCE")) {
+        us_control(US_DISTANCE);
+        return OK;
+    } else {
+        printf("invalid US values (ENABLE/DISABLE/DISTANCE) \r\n");
+        return INVALID_ARGUMENT;
+    }
+}
+command_result_t parse_rgb_led_command(char *input)
+{
+    char *power_mode;
+    char *rgb_led_number;
+    char *nptr = NULL;
+    int int_value;
+
+    power_mode = strtok(NULL, " ");
+    rgb_led_number = strtok(NULL, "\n");
+
+    int_value = strtol(rgb_led_number, &nptr, 10);
+
+    if (((int_value) > 8) || (int_value < 1))
+        return INVALID_ARGUMENT;
+
+    if ((!strcmp(power_mode, "ON"))) {
+        rgb_led_control(ON, int_value);
+    } else if ((!strcmp(power_mode, "OFF"))) {
+        rgb_led_control(OFF, int_value);
+    } else if (rgb_led_number == nptr) {
+        printf("invalid RGB_LED values\n");
+        return INVALID_ARGUMENT;
+    } else {
+        printf("invalid LED power mode (ON/OFF) \r\n");
+        return BAD_COMMAND;
+    }
+    return OK;
+}
+command_result_t parse_print_command(char *input)
+{
+    char *mode;
+
+    mode = strtok(NULL, " ");
+
+    if (!strcmp(mode, "USB")) {
+        print_control(USB);
+        return OK;
+    } else if (!strcmp(mode, "BT")) {
+        print_control(BLUETOOTH);
+        return OK;
+    } else if (!strcmp(mode, "BOTH")) {
+        print_control(BOTH);
+        return OK;
+    } else {
+        printf("Invalid Print mode\r\n");
+        return INVALID_ARGUMENT;
+    }
+}
+
+void servo_control(servo_direction_t servo_direction, int percentage)
+{
+    printf("direction: %d \r\n", servo_direction);
+    printf("percentage: %d \r\n", percentage);
+    printf("SERVO_CONTROL_HELYE\r\n");
+}
+void motor_control(motor_direction_t motor_direction, int percentage)
+{
+    printf("direction: %d \r\n", motor_direction);
+    printf("percentage: %d \r\n", percentage);
+    printf("MOTOR_CONTROL_HELYE\r\n");
+}
+void rgb_control(rgb_sensor_list_t rgb_sensor_list, int led_numb)
+{
+    printf("code: %d\r\n", rgb_sensor_list);
+    printf("led_numb: %d\r\n", led_numb);
+    printf("RGB_CONTROL_HELYE\r\n");
+}
+void us_control(ultra_sonic_mode_t ultra_sonic_mode)
+{
+    printf("mode: %d\r\n", ultra_sonic_mode);
+    printf("US_CONTROL_HELYE\r\n");
+}
+void rgb_led_control(rgb_led_power_t rgb_led_power, int led_numb)
+{
+    printf("power: %d\r\n", rgb_led_power);
+    printf("led_numb: %d\r\n", led_numb);
+    printf("RGB_LED_CONTROL_HELYE\r\n");
+}
+void print_control(printf_modes_t printf_modes)
+{
+    printf("MODE: %d\r\n", printf_modes);
+    if(printf_modes==BOTH){
+        printf_mode = BOTH;
+    }
+    else if(printf_modes==BLUETOOTH){
+        printf_mode = BLUETOOTH;
+    }else if(printf_modes==USB){
+        printf_mode = USB;
+    }
+
+}
+void emergency_mode()
+{
+
+    printf("EMERGENCY MODE!!!!444\r\n");
+}
+
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1384,10 +1669,31 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN 5 */
+   // commands = (char *) malloc(40);
+
+
+    HAL_GPIO_WritePin(GPIOG,BT_nRESET_Pin,GPIO_PIN_SET);
+    printf(
+                "Greetings! The car waits for your commands! \r\n"
+                        "You have to put the instructions the FOLLOWING WAY, or it CAN'T accept it\r\n"
+                        "--->COMPONENT Value1 Value2<---\r\n"
+                        "Component list:   |       Value1:         |    Value2\r\n"
+                        "MOTOR             |       FWD/BCK         |     0-99\r\n"
+                        "SERVO             |         R/L           |     0-99\r\n"
+                        "ULTRA_SONIC       |ENABLE/DISABLE/DISTANCE|     --- \r\n"
+                        "RGB_SENSOR        |     R,G,B,C,COLOR     |   1-8, 9=ALL\r\n"
+                        "RGB_LED           |        ON/OFF         |   1-8, 9=ALL\r\n"
+                        "PRINT             |      USB/BT/BOTH      |     ---\r\n"
+                        "-----------FOR EMERGENCY PRESS---->  ER  <--------------\r\n");
+
+    //commands = (char *) realloc(commands, strlen(commands));
+
+   // osDelay(1000);
 
   /* Infinite loop */
   for(;;)
   {
+
 
   }
   /* USER CODE END 5 */ 
@@ -1406,11 +1712,11 @@ void drive(int speed)
    //forward 77 - 100% moves -> 0.23
    //backward 0 - 24% moves -> 0.24
    float speed_pwm;
-   if(motor_dir == FORWARD){
+   if(motor_direction == FORWARD){
        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);
        speed_pwm = htim2.Init.Period * (0.77 + (float) speed * 0.23 / 100);
        __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
-   } else if(motor_dir == BACKWARD){
+   } else if(motor_direction == BACKWARD){
        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
        speed_pwm = htim2.Init.Period * (0.24 - (float) speed * 0.24 / 100);
        __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
