@@ -109,6 +109,23 @@ typedef enum motor_direction
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define UART_PUTCHAR int __io_putchar(int ch)
+
+//Multiplexer and RGB sensor
+#define APDS9960ADDRESS (0b111001<<1)  //0x39 (hex)
+#define TCA9548AADDRESS (0b1110000<<1) //0x70 (hex)
+
+//RGB sensor registers definition
+#define _ENABLE  0x80    // Enable status and interrupts
+#define _ATIME   0x81    // RGBC ADC time
+#define _CONTROL 0x8F    // Gain control register
+#define _CDATA   0x94    // Clear ADC low data register
+#define _CDATAH  0x95    // Clear ADC high data register
+#define _RDATA   0x96    // RED ADC low data register
+#define _RDATAH  0x97    // RED ADC high data register
+#define _GDATA   0x98    // GREEN ADC low data register
+#define _GDATAH  0x99    // GREEN ADC high data register
+#define _BDATA   0x9A    // BLUE ADC low data register
+#define _BDATAH  0x9B    // BLUE ADC high data register
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -146,6 +163,10 @@ PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
+uint8_t standby_value = 0;
+uint8_t standbyvalue = 0;
+uint16_t Clear, Red, Green, Blue;
+
 char tmp[1];
 char buffer[32];
 int counter = 0;
@@ -1655,7 +1676,71 @@ void emergency_mode()
     printf("EMERGENCY MODE!!!!444\r\n");
 }
 
+//Read values from the RGB sensor
+unsigned int Color_Read_value(char reg) {
+  uint8_t low_byte;
+  uint8_t high_byte;
+  uint16_t color;
 
+  switch(reg) {
+    case 'C': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _CDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _CDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'R': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _RDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _RDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'G': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _GDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _GDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    case 'B': HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _BDATA, I2C_MEMADD_SIZE_8BIT, &low_byte, 1, 1000);
+              HAL_I2C_Mem_Read(&hi2c1, (uint16_t)APDS9960ADDRESS, _BDATAH, I2C_MEMADD_SIZE_8BIT, &high_byte, 1, 1000);
+              color = ((high_byte & 0xFF) <<8) | (low_byte & 0xFF);
+              return color;
+              break;
+
+    default:  return 0;
+  }
+}
+
+//Initialize multiplexer and 8 RGB sensors - read values from sensors - deinitialize multiplexer and 8 sensors
+void RGB_sensors(){
+	standby_value = 0b00000001;
+	for (int i = 0; i < 8; i++) {
+
+		HAL_GPIO_WritePin(GPIOG, EXP_nRESET_Pin, GPIO_PIN_SET);
+		HAL_I2C_Master_Transmit(&hi2c1, (uint16_t) TCA9548AADDRESS, &standby_value, 1, 1000);
+
+		standbyvalue = 0b00000000;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ENABLE, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0xDB;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ATIME, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0b11;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _CONTROL, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+
+		standbyvalue = 0b00000001 | 0b00000010;
+		HAL_I2C_Mem_Write(&hi2c1, (uint16_t) APDS9960ADDRESS, _ENABLE, I2C_MEMADD_SIZE_8BIT, &standbyvalue, 1, 1000);
+		osDelay(110); //nem Johny mondta - 20ms-t mondott, de nem ment
+
+		Clear = Color_Read_value('C');
+		Red = Color_Read_value('R');
+		Green = Color_Read_value('G');
+		Blue = Color_Read_value('B');
+		printf("C: %d R: %d G: %d B: %d\r\n", Clear, Red * 255 / Clear, Green * 255 / Clear, Blue * 255 / Clear);
+		standby_value <<= 1;
+	}
+	HAL_GPIO_WritePin(GPIOG, EXP_nRESET_Pin, GPIO_PIN_RESET);
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1693,7 +1778,6 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-
 
   }
   /* USER CODE END 5 */ 
