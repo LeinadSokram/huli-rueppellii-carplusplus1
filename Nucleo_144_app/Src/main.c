@@ -125,8 +125,6 @@ ETH_HandleTypeDef heth;
 
 I2C_HandleTypeDef hi2c1;
 
-SPI_HandleTypeDef hspi4;
-
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
@@ -187,7 +185,6 @@ static void MX_ADC2_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_ETH_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_SPI4_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
@@ -246,7 +243,6 @@ int main(void)
   MX_ADC3_Init();
   MX_ETH_Init();
   MX_I2C1_Init();
-  MX_SPI4_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
@@ -617,46 +613,6 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * @brief SPI4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI4_Init(void)
-{
-
-  /* USER CODE BEGIN SPI4_Init 0 */
-
-  /* USER CODE END SPI4_Init 0 */
-
-  /* USER CODE BEGIN SPI4_Init 1 */
-
-  /* USER CODE END SPI4_Init 1 */
-  /* SPI4 parameter configuration*/
-  hspi4.Instance = SPI4;
-  hspi4.Init.Mode = SPI_MODE_MASTER;
-  hspi4.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi4.Init.DataSize = SPI_DATASIZE_4BIT;
-  hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi4.Init.NSS = SPI_NSS_HARD_OUTPUT;
-  hspi4.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi4.Init.CRCPolynomial = 7;
-  hspi4.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi4.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  if (HAL_SPI_Init(&hspi4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI4_Init 2 */
-
-  /* USER CODE END SPI4_Init 2 */
-
-}
-
-/**
   * @brief TIM1 Initialization Function
   * @param None
   * @retval None
@@ -770,9 +726,11 @@ static void MX_TIM2_Init(void)
   HAL_TIM_Base_Start(&htim2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
 
 }
-  /**
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -1294,22 +1252,24 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, IMU_RESET_Pin|DRV_EN_IN1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(IMU_RESET_GPIO_Port, IMU_RESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD1_Pin|DRV_DISABLE_Pin|DRV_nSLEEP_Pin|LD3_Pin 
-                          |SB_LED_EN_Pin|LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DRV_INA_GPIO_Port, DRV_INA_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin|SB_LED_EN_Pin|LD2_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOG, DRV_INB_Pin|BT_AUTO_CONNECT_Pin|BT_nRESET_Pin|BT_UART_BAUD_FORCE_Pin 
+                          |BT_AUTO_MASTER_MODE_Pin|USB_PowerSwitchOn_Pin|EXP_nRESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(BT_FACTORY_DEFAULTS_GPIO_Port, BT_FACTORY_DEFAULTS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, BT_AUTO_CONNECT_Pin|BT_nRESET_Pin|BT_UART_BAUD_FORCE_Pin|BT_AUTO_MASTER_MODE_Pin 
-                          |USB_PowerSwitchOn_Pin|EXP_nRESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : IMU_INT_Pin */
   GPIO_InitStruct.Pin = IMU_INT_Pin;
@@ -1317,12 +1277,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(IMU_INT_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : IMU_RESET_Pin DRV_EN_IN1_Pin */
-  GPIO_InitStruct.Pin = IMU_RESET_Pin|DRV_EN_IN1_Pin;
+  /*Configure GPIO pin : IMU_RESET_Pin */
+  GPIO_InitStruct.Pin = IMU_RESET_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+  HAL_GPIO_Init(IMU_RESET_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : USER_Btn_Pin */
   GPIO_InitStruct.Pin = USER_Btn_Pin;
@@ -1330,20 +1290,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_Btn_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD1_Pin DRV_DISABLE_Pin DRV_nSLEEP_Pin LD3_Pin 
-                           SB_LED_EN_Pin LD2_Pin */
-  GPIO_InitStruct.Pin = LD1_Pin|DRV_DISABLE_Pin|DRV_nSLEEP_Pin|LD3_Pin 
-                          |SB_LED_EN_Pin|LD2_Pin;
+  /*Configure GPIO pin : DRV_INA_Pin */
+  GPIO_InitStruct.Pin = DRV_INA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(DRV_INA_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD1_Pin LD3_Pin SB_LED_EN_Pin LD2_Pin */
+  GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin|SB_LED_EN_Pin|LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : DRV_nFAULT_Pin */
-  GPIO_InitStruct.Pin = DRV_nFAULT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pins : DRV_INB_Pin BT_AUTO_CONNECT_Pin BT_nRESET_Pin BT_UART_BAUD_FORCE_Pin 
+                           BT_AUTO_MASTER_MODE_Pin USB_PowerSwitchOn_Pin EXP_nRESET_Pin */
+  GPIO_InitStruct.Pin = DRV_INB_Pin|BT_AUTO_CONNECT_Pin|BT_nRESET_Pin|BT_UART_BAUD_FORCE_Pin 
+                          |BT_AUTO_MASTER_MODE_Pin|USB_PowerSwitchOn_Pin|EXP_nRESET_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(DRV_nFAULT_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BT_FACTORY_DEFAULTS_Pin */
   GPIO_InitStruct.Pin = BT_FACTORY_DEFAULTS_Pin;
@@ -1351,15 +1319,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(BT_FACTORY_DEFAULTS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BT_AUTO_CONNECT_Pin BT_nRESET_Pin BT_UART_BAUD_FORCE_Pin BT_AUTO_MASTER_MODE_Pin 
-                           USB_PowerSwitchOn_Pin EXP_nRESET_Pin */
-  GPIO_InitStruct.Pin = BT_AUTO_CONNECT_Pin|BT_nRESET_Pin|BT_UART_BAUD_FORCE_Pin|BT_AUTO_MASTER_MODE_Pin 
-                          |USB_PowerSwitchOn_Pin|EXP_nRESET_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pin : USB_OverCurrent_Pin */
   GPIO_InitStruct.Pin = USB_OverCurrent_Pin;
@@ -1655,6 +1614,48 @@ void emergency_mode()
     printf("EMERGENCY MODE!!!!444\r\n");
 }
 
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if(htim->Instance == TIM9){
+        int tim9_cnt = TIM9->CNT;
+        float steps = hall_overflow * 65535 + tim9_cnt - hall_previous;
+        hall_previous = tim9_cnt;
+        float freq = 216000000 / steps;
+        hall_overflow = 0;
+        moving_speed_kmh = freq * M_PI * 0.06 * 3.6;
+    }
+}
+
+void drive(int speed)
+{
+   int ctrl_speed = speed;
+   if(ctrl_speed > 0){
+
+   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+   //forward 77 - 100% moves -> 0.23
+   //backward 0 - 24% moves -> 0.24
+   float speed_pwm;
+   if(motor_direction == FORWARD){
+       HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+       HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_RESET);
+       speed_pwm = htim2.Init.Period * (0.77 + (float) ctrl_speed * 0.23 / 100);
+       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
+   } else if(motor_direction == BACKWARD){
+       HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_RESET);
+       HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_SET);
+       speed_pwm = htim2.Init.Period * (0.24 - (float) ctrl_speed * 0.24 / 100);
+       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
+   }
+   }else if(ctrl_speed <= 0){
+       brake();
+   }
+}
+
+void brake()
+{
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_1, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_SET);
+}
 
 /* USER CODE END 4 */
 
@@ -1697,50 +1698,6 @@ void StartDefaultTask(void const * argument)
 
   }
   /* USER CODE END 5 */ 
-}
-
-void drive(int speed)
-{
-   if(speed > 100){
-       speed = 100;
-   }
-   if(speed > 0){
-   //nSleep
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-   //Disable -> inverse logic
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
-   //forward 77 - 100% moves -> 0.23
-   //backward 0 - 24% moves -> 0.24
-   float speed_pwm;
-   if(motor_direction == FORWARD){
-       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_RESET);
-       speed_pwm = htim2.Init.Period * (0.77 + (float) speed * 0.23 / 100);
-       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
-   } else if(motor_direction == BACKWARD){
-       HAL_GPIO_WritePin(GPIOE, GPIO_PIN_15, GPIO_PIN_SET);
-       speed_pwm = htim2.Init.Period * (0.24 - (float) speed * 0.24 / 100);
-       __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, speed_pwm);
-   }
-   }else if(speed <= 0){
-       brake();
-   }
-}
-
-void brake()
-{
-   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
-}
-
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-    if(htim->Instance == TIM9){
-        int tim9_cnt = TIM9->CNT;
-        float steps = hall_overflow * 65535 + tim9_cnt - hall_previous;
-        hall_previous = tim9_cnt;
-        float freq = 216000000 / steps;
-        hall_overflow = 0;
-        moving_speed_kmh = freq * M_PI * 0.06 * 3.6;
-    }
 }
 
 /**
