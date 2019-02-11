@@ -57,6 +57,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdlib.h>
+#include "USsensor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -145,6 +146,8 @@ UART_HandleTypeDef huart6;
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
+osThreadId USsensorHandle;
+
 /* USER CODE BEGIN PV */
 char tmp[1];
 char buffer[32];
@@ -203,6 +206,7 @@ static void MX_USART3_UART_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
 void StartDefaultTask(void const * argument);
+void USdistance(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -262,7 +266,7 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  init_us(sensors);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -281,6 +285,8 @@ int main(void)
   /* definition and creation of defaultTask */
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  osThreadDef(USTask, USdistance, osPriorityNormal, 0, 128);
+    USsensorHandle = osThreadCreate(osThread(USTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -840,9 +846,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 0;
+  htim4.Init.Prescaler = 1080-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 0;
+  htim4.Init.Period = 6000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
@@ -856,7 +862,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
+  sConfigOC.Pulse = 10;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -872,6 +878,11 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM4_Init 2 */
+
+  HAL_TIM_Base_Start(&htim4);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
@@ -946,7 +957,7 @@ static void MX_TIM10_Init(void)
   htim10.Instance = TIM10;
   htim10.Init.Prescaler = 0;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 0;
+  htim10.Init.Period = 1000;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
@@ -957,15 +968,18 @@ static void MX_TIM10_Init(void)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 0xF;
   if (HAL_TIM_IC_ConfigChannel(&htim10, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN TIM10_Init 2 */
+
+  HAL_TIM_Base_Start_IT(&htim10);
+  HAL_TIM_IC_Start_IT(&htim10,TIM_CHANNEL_1);
 
   /* USER CODE END TIM10_Init 2 */
 
@@ -991,7 +1005,7 @@ static void MX_TIM11_Init(void)
   htim11.Instance = TIM11;
   htim11.Init.Prescaler = 0;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim11.Init.Period = 0;
+  htim11.Init.Period = 2311;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
@@ -1002,15 +1016,18 @@ static void MX_TIM11_Init(void)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 0xf;
   if (HAL_TIM_IC_ConfigChannel(&htim11, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM11_Init 2 */
+  /* USER CODE BEGIN 0_Init 2 */
+
+  HAL_TIM_Base_Start_IT(&htim11);
+  HAL_TIM_IC_Start_IT(&htim11,TIM_CHANNEL_1);
 
   /* USER CODE END TIM11_Init 2 */
 
@@ -1077,7 +1094,7 @@ static void MX_TIM13_Init(void)
   htim13.Instance = TIM13;
   htim13.Init.Prescaler = 0;
   htim13.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim13.Init.Period = 0;
+  htim13.Init.Period = 3452;
   htim13.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim13.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim13) != HAL_OK)
@@ -1088,15 +1105,18 @@ static void MX_TIM13_Init(void)
   {
     Error_Handler();
   }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 0xf;
   if (HAL_TIM_IC_ConfigChannel(&htim13, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN TIM13_Init 2 */
+
+  HAL_TIM_Base_Start_IT(&htim13);
+  HAL_TIM_IC_Start_IT(&htim13,TIM_CHANNEL_1);
 
   /* USER CODE END TIM13_Init 2 */
 
@@ -1538,6 +1558,7 @@ command_result_t parse_rgb_sensor_command(char *input)
         return BAD_COMMAND;
     }
 }
+
 command_result_t parse_ultra_sonic_command(char *input)
 {
     char *mode;
@@ -1656,6 +1677,56 @@ void emergency_mode()
 }
 
 
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if(htim->Instance == TIM9){
+        int tim9_cnt = TIM9->CNT;
+        float steps = hall_overflow * 65535 + tim9_cnt - hall_previous;
+        hall_previous = tim9_cnt;
+        float freq = 216000000 / steps;
+        hall_overflow = 0;
+        moving_speed_kmh = freq * M_PI * 0.06 * 3.6;
+    }
+
+    if (htim->Instance == TIM10) {
+        if (sensors[0].state == RISING){
+            sensors[0].start = TIM10->CNT;
+            sensors[0].overflows = 0;
+            sensors[0].state = FALLING;
+
+        } else if(sensors[0].state == FALLING) {
+           sensors[0].end = TIM10->CNT;
+           US_calculate_distance(&(sensors[0]), htim10.Init.Period, 216000000);
+           sensors[0].state = RISING;
+        }
+
+    }
+    if (htim->Instance == TIM11) {
+        if (sensors[1].state == RISING){
+            sensors[1].start = TIM11->CNT;
+            sensors[1].overflows = 0;
+            sensors[1].state = FALLING;
+        } else if(sensors[1].state == FALLING) {
+            sensors[1].end = TIM11->CNT;
+            US_calculate_distance(&(sensors[1]), htim11.Init.Period, 216000000);
+            sensors[1].state = RISING;
+        }
+    }
+    if (htim->Instance == TIM13) {
+        if (sensors[2].state == RISING){
+            sensors[2].start = TIM13->CNT;
+            sensors[2].overflows = 0;
+            sensors[2].state = FALLING;
+        } else if(sensors[2].state == FALLING) {
+            sensors[2].end = TIM13->CNT;
+            US_calculate_distance(&(sensors[2]), htim13.Init.Period, 108000000);
+            sensors[2].state = RISING;
+        }
+    }
+
+
+}
+
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1665,6 +1736,19 @@ void emergency_mode()
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
+void USdistance(void const * argument)
+{
+    for(;;){
+        osDelay(500);
+        char message[20];
+        sprintf(message, "distance: %lu\r\n", sensors[0].distance);
+        HAL_UART_Transmit(&huart3,(uint8_t*) message, strlen(message), 100);
+        sprintf(message, "distance2: %lu\r\n", sensors[1].distance);
+        HAL_UART_Transmit(&huart3,(uint8_t*) message, strlen(message), 100);
+        sprintf(message, "distance3: %lu\r\n", sensors[2].distance);
+        HAL_UART_Transmit(&huart3,(uint8_t*) message, strlen(message), 100);
+    }
+}
 void StartDefaultTask(void const * argument)
 {
 
@@ -1731,18 +1815,6 @@ void brake()
    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
 }
 
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-    if(htim->Instance == TIM9){
-        int tim9_cnt = TIM9->CNT;
-        float steps = hall_overflow * 65535 + tim9_cnt - hall_previous;
-        hall_previous = tim9_cnt;
-        float freq = 216000000 / steps;
-        hall_overflow = 0;
-        moving_speed_kmh = freq * M_PI * 0.06 * 3.6;
-    }
-}
-
 /**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM14 interrupt took place, inside
@@ -1754,7 +1826,15 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   /* USER CODE BEGIN Callback 0 */
-
+    if (htim->Instance == TIM10) {
+        sensors[0].overflows++;
+    }
+    if (htim->Instance == TIM11) {
+        sensors[1].overflows++;
+    }
+    if (htim->Instance == TIM13) {
+        sensors[2].overflows++;
+    }
   /* USER CODE END Callback 0 */
   if (htim->Instance == TIM14) {
     HAL_IncTick();
